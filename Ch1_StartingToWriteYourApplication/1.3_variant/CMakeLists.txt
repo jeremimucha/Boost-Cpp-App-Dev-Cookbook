@@ -71,7 +71,7 @@ endif()
 
 add_library(Project_config INTERFACE)
 if( CMAKE_CXX_COMPILER_ID MATCHES "MSVC" )
-    target_compile_options( Project_config INTERFACE /W4 /WX )
+    target_compile_options( Project_config INTERFACE /W4 )
 else()
     target_compile_options( Project_config INTERFACE
       -Wall

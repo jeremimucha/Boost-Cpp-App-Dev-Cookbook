@@ -37,6 +37,28 @@ struct always_false : std::false_type { };
 template<typename T>
 inline constexpr auto always_false_v = always_false<T>::value;
 
+
+// Variadic overload type for inheriting from lambdas...
+template<typename... Ts>
+struct overloaded : Ts...
+{
+    using Ts::operator()...;
+};
+// template deduction guide
+template<typename... Ts>
+overloaded(Ts...) -> overloaded<Ts...>;
+
+// Go a step further - provide a nicer interface
+template<typename Variant, typename... Ts>
+decltype(auto) match(Variant&& v, Ts&&... ts)
+{
+    return std::visit(
+        overloaded{std::forward<Ts>(ts)...},
+        std::forward<Variant>(v)
+        );
+}
+
+
 int main()
 {
     using var_t = std::variant<int, const char*, std::string>;
@@ -56,6 +78,16 @@ int main()
     val.emplace<0>(42);
     // assign in-place by type
     val.emplace<std::string>("A different value");
+
+// If an empty-state is needed, or all the type alternative are non-default-constructible
+// the std::monostate can be used to indicate the empty-state, or 'uninitialized'
+    std::cout << "\nMonostate example:\n";
+    std::variant<std::monostate, std::string> monoval{};
+    if (std::holds_alternative<std::monostate>(monoval)) {
+        std::cout << "monoval holds the monostate" << "\n";
+    }
+    monoval.emplace<std::string>("Not a monostate anymore");
+    std::cout << "get<std::string>(monoval) = " << std::get<std::string>(monoval) << "\n";
 
     // reading values
     // use std::get<> with either type or type index
@@ -96,6 +128,7 @@ int main()
     // use a generic lambda, but also utilise `if constexpr` to, at compile time, identify the type
     // of the variable held by the variant. This is an alternative to a class with overloaded
     // operator()'s
+    std::cout << "\nType matching lambda visitor...\n";
     auto type_matching_lambda_visitor = [](auto&& arg){
             using T = std::decay_t<decltype(arg)>;
             if constexpr (std::is_same_v<T, int>) {
@@ -117,13 +150,25 @@ int main()
     }
     std::visit(type_matching_lambda_visitor, val);
 
-// If an empty-state is needed, or all the type alternative are non-default-constructible
-// the std::monostate can be used to indicate the empty-state, or 'uninitialized'
-    std::cout << "\nMonostate example:\n";
-    std::variant<std::monostate, std::string> monoval{};
-    if (std::holds_alternative<std::monostate>(monoval)) {
-        std::cout << "monoval holds the monostate" << "\n";
+    // we can also inherit from lambdas:
+    std::cout << "\nLambda-inheriting visitor...\n";
+    for (const auto& v : values)
+    {
+        std:visit(overloaded{
+            [](auto&& arg) { std::cout << "generic overload: " << arg << "\n"; },
+            [](int i) { std::cout << "int overload: " << i << "\n"; },
+            [](const char* cstr) { std::cout << "const char* overload: " << cstr << "\n"; }
+        }, v);
     }
-    monoval.emplace<std::string>("Not a monostate anymore");
-    std::cout << "get<std::string>(monoval) = " << std::get<std::string>(monoval) << "\n";
+
+    // using the `match` template
+    std::cout << "\nLambda-inheriting visitor via `match` convenience template...\n";
+    for (const auto& v : values)
+    {
+        match(v,
+            [](auto&& arg) { std::cout << "generic match: " << arg << "\n"; },
+            [](int i) { std::cout << "int match: " << i << "\n"; },
+            [](const char* cstr) { std::cout << "const char* match: " << cstr << "\n"; }
+        );
+    }
 }
